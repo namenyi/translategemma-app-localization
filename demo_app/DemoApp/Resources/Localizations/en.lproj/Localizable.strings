@@ -2,7 +2,7 @@
 "app_title" = "Demo App";
 
 /* Welcome message shown on first launch */
-"welcome_message" = "Welcome to Demo App!";
+"welcome_message" = "Welcome to our awesome Demo App!";
 
 /* Button to continue */
 "continue_button" = "Continue";
@@ -25,5 +25,8 @@
 /* About section */
 "about_title" = "About";
 
-/* Version label */
-"version_label" = "Version";
+/* Logout button */
+"logout_button" = "Log Out";
+
+/* New feature banner */
+"new_feature_banner" = "Check out our new features!";
