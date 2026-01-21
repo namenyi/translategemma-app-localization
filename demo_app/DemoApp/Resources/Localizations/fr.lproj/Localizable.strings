@@ -1,0 +1,29 @@
+/* App Title */
+"app_title" = "Demo App";
+
+/* Welcome message shown on first launch */
+"welcome_message" = "Bienvenue dans Demo App!";
+
+/* Button to continue */
+"continue_button" = "Continuer";
+
+/* Cancel action */
+"cancel_button" = "Annuler";
+
+/* Settings screen title */
+"settings_title" = "Paramètres";
+
+/* Profile section header */
+"profile_section" = "Profil";
+
+/* Notifications toggle label */
+"notifications_label" = "Activer les notifications";
+
+/* Dark mode toggle label */
+"dark_mode_label" = "Mode sombre";
+
+/* About section */
+"about_title" = "À propos";
+
+/* Version label */
+"version_label" = "Version";

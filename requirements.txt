@@ -1,0 +1,4 @@
+click>=8.1.0
+requests>=2.31.0
+unidiff>=0.7.5
+pytest>=7.4.0

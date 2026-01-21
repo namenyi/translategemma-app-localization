@@ -1,0 +1,11 @@
+/* App Title */
+"app_title" = "Test App";
+
+/* Welcome message */
+"welcome" = "Hello, World!";
+
+/* With escapes */
+"escaped" = "Line 1\nLine 2\tTabbed";
+
+/* With quotes */
+"quoted" = "She said \"Hello\"";
