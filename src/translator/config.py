@@ -12,12 +12,15 @@ LANGUAGE_NAMES = {
     "es": "Spanish",
     "it": "Italian",
     "pt": "Portuguese",
+    "pt-BR": "Brazilian Portuguese",
     "nl": "Dutch",
     "pl": "Polish",
     "ru": "Russian",
     "ja": "Japanese",
     "ko": "Korean",
     "zh": "Chinese",
+    "zh-Hans": "Simplified Chinese",
+    "zh-Hant": "Traditional Chinese",
     "ar": "Arabic",
     "tr": "Turkish",
     "vi": "Vietnamese",
@@ -44,7 +47,7 @@ class TranslationConfig:
         verbose: If True, print detailed output.
     """
     source_language: str = "en"
-    target_languages: list[str] = field(default_factory=lambda: ["de", "fr"])
+    target_languages: list[str] = field(default_factory=lambda: ["de", "fr", "es", "it", "ja", "ko", "pt-BR", "ru", "zh-Hans", "zh-Hant"])
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "translategemma:12b"
     use_huggingface: bool = False

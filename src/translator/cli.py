@@ -21,7 +21,7 @@ def cli():
 @click.argument('file', type=click.Path(exists=True, path_type=Path))
 @click.option('--base', default='HEAD~1', help='Base git reference to compare against')
 @click.option('--dry-run', is_flag=True, help='Show what would be translated without making changes')
-@click.option('--languages', '-l', default='de,fr', help='Comma-separated target language codes')
+@click.option('--languages', '-l', default='de,fr,es,it,ja,ko,pt-BR,ru,zh-Hans,zh-Hant', help='Comma-separated target language codes')
 @click.option('--ollama-url', default='http://localhost:11434', help='Ollama API URL')
 @click.option('--model', default='translategemma:12b', help='Ollama model name')
 @click.option('--verbose', '-v', is_flag=True, help='Verbose output')

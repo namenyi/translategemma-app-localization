@@ -69,12 +69,20 @@ class TranslationService:
         Returns:
             TranslationReport with results.
         """
-        # Detect changes
-        changes = self.detector.get_translatable_changes(
+        # Detect git changes
+        git_changes = self.detector.get_translatable_changes(
             source_file,
             base_ref=base_ref,
             head_ref="HEAD"
         )
+
+        # Detect missing translations in target languages
+        missing_changes = self._detect_missing_translations(source_file)
+
+        # Merge changes, avoiding duplicates (git changes take precedence)
+        git_keys = {c.key for c in git_changes}
+        unique_missing = [c for c in missing_changes if c.key not in git_keys]
+        changes = git_changes + unique_missing
 
         if not changes:
             return TranslationReport(
@@ -143,16 +151,24 @@ class TranslationService:
             TranslationReport with results.
         """
         # Detect changes from working tree
-        changes = self.detector.detect_changes_from_working_tree(
+        all_changes = self.detector.detect_changes_from_working_tree(
             source_file,
             base_ref=base_ref
         )
 
         # Filter to translatable changes
-        translatable = [
-            c for c in changes
+        git_translatable = [
+            c for c in all_changes
             if c.change_type in (ChangeType.ADDED, ChangeType.MODIFIED)
         ]
+
+        # Detect missing translations in target languages
+        missing_changes = self._detect_missing_translations(source_file)
+
+        # Merge changes, avoiding duplicates
+        git_keys = {c.key for c in git_translatable}
+        unique_missing = [c for c in missing_changes if c.key not in git_keys]
+        translatable = git_translatable + unique_missing
 
         if not translatable:
             return TranslationReport(
@@ -180,7 +196,7 @@ class TranslationService:
 
         # Get removals
         removed_keys = {
-            c.key for c in changes
+            c.key for c in all_changes
             if c.change_type == ChangeType.REMOVED
         }
 
@@ -198,6 +214,60 @@ class TranslationService:
             files_updated=files_updated,
             dry_run=False
         )
+
+    def _detect_missing_translations(
+        self,
+        source_file: Path
+    ) -> list[StringChange]:
+        """Detect keys that exist in source but are missing in any target language.
+
+        Args:
+            source_file: Path to the source .strings file.
+
+        Returns:
+            List of StringChange objects for missing entries (as ADDED).
+        """
+        # Parse source file to get all keys
+        source_entries = self.parser.parse_file(source_file)
+        source_dict = {e.key: e for e in source_entries}
+        source_keys = set(source_dict.keys())
+
+        if not source_keys:
+            return []
+
+        # Determine target file paths
+        source_path = Path(source_file)
+        lproj_dir = source_path.parent
+        base_dir = lproj_dir.parent
+        file_name = source_path.name
+
+        # Find all keys missing in any target language
+        missing_keys: set[str] = set()
+
+        for target_lang in self.config.target_languages:
+            target_path = base_dir / f"{target_lang}.lproj" / file_name
+
+            if target_path.exists():
+                target_entries = self.parser.parse_file(target_path)
+                target_keys = {e.key for e in target_entries}
+            else:
+                target_keys = set()
+
+            # Keys in source but not in target
+            lang_missing = source_keys - target_keys
+            missing_keys.update(lang_missing)
+
+        # Create StringChange objects for missing keys
+        changes = []
+        for key in missing_keys:
+            entry = source_dict[key]
+            changes.append(StringChange(
+                key=key,
+                change_type=ChangeType.ADDED,
+                new_value=entry.value
+            ))
+
+        return changes
 
     def _update_target_files(
         self,
