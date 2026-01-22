@@ -98,7 +98,11 @@ translation-service/
 
 - Groups strings into token-limited batches via `_create_batches()`
 - Calls `TranslationEngine.translate_batch_to_all()` for each batch
-- Progress callback reports per-string progress within batches
+- `BatchProgress` dataclass tracks: batch number, strings completed, elapsed time, percentage
+- Callbacks:
+  - `progress_callback` - per-string progress
+  - `batch_progress_callback` - batch-level progress with timing
+  - `on_batch_complete` - called after each batch for incremental file writes
 - Failed batches mark all contained strings as errors
 
 ### Main Service (`src/translator/core/service.py`)
@@ -108,7 +112,8 @@ Orchestration flow:
 2. Detect missing translations (keys in source but absent from any target language)
 3. Merge changes (git changes + missing translations, avoiding duplicates)
 4. Group strings into batches and translate to all target languages
-5. Update target .strings files (add new keys, update modified, remove deleted)
+5. **Incremental writes**: Update target files after each batch completes (progress saved if interrupted)
+6. Return final report with all updated files
 
 ### CLI (`src/translator/cli.py`)
 

@@ -8,6 +8,7 @@ from .config import TranslationConfig
 from .core import TranslationService
 from .diff import DiffDetector, ChangeType
 from .strings import StringsParser
+from .translation.batch import BatchProgress
 
 
 @click.group()
@@ -65,7 +66,24 @@ def translate(
 
     def progress_callback(current: int, total: int, key: str):
         if verbose:
-            click.echo(f"  [{current}/{total}] Translating: {key}")
+            click.echo(f"    [{current}/{total}] {key}")
+
+    def batch_progress_callback(progress: BatchProgress):
+        """Show batch-level progress with timing info."""
+        pct = progress.percent_complete
+        elapsed = progress.elapsed_formatted
+
+        # Build progress bar
+        bar_width = 20
+        filled = int(bar_width * pct / 100)
+        bar = "=" * filled + "-" * (bar_width - filled)
+
+        click.echo(
+            f"  Batch {progress.current_batch}/{progress.total_batches} "
+            f"[{bar}] {pct:.0f}% "
+            f"({progress.strings_completed}/{progress.total_strings} strings) "
+            f"[{elapsed}]"
+        )
 
     click.echo(f"Analyzing changes in {file}...")
     click.echo(f"Comparing against: {base}")
@@ -77,7 +95,8 @@ def translate(
     report = service.translate_file(
         file,
         base_ref=base,
-        progress_callback=progress_callback
+        progress_callback=progress_callback if verbose else None,
+        batch_progress_callback=batch_progress_callback
     )
 
     # Display results

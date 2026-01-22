@@ -1,6 +1,7 @@
 """Batch translation with progress tracking."""
 
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from ..diff import StringChange
@@ -8,6 +9,43 @@ from .engine import TranslationEngine, estimate_tokens
 
 # Overhead tokens for the batch prompt template
 BATCH_PROMPT_OVERHEAD = 100
+
+
+@dataclass
+class BatchProgress:
+    """Progress information for batch translation.
+
+    Attributes:
+        current_batch: Current batch number (1-indexed).
+        total_batches: Total number of batches.
+        strings_completed: Number of strings completed so far.
+        total_strings: Total number of strings to translate.
+        elapsed_seconds: Time elapsed since start.
+        current_key: Key currently being processed.
+    """
+    current_batch: int
+    total_batches: int
+    strings_completed: int
+    total_strings: int
+    elapsed_seconds: float
+    current_key: str
+
+    @property
+    def percent_complete(self) -> float:
+        """Calculate percentage complete."""
+        if self.total_strings == 0:
+            return 100.0
+        return (self.strings_completed / self.total_strings) * 100
+
+    @property
+    def elapsed_formatted(self) -> str:
+        """Format elapsed time as mm:ss or hh:mm:ss."""
+        total_secs = int(self.elapsed_seconds)
+        hours, remainder = divmod(total_secs, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        if hours > 0:
+            return f"{hours}:{minutes:02d}:{seconds:02d}"
+        return f"{minutes}:{seconds:02d}"
 
 
 @dataclass
@@ -43,6 +81,8 @@ class BatchResult:
 
 
 ProgressCallback = Callable[[int, int, str], None]
+BatchProgressCallback = Callable[[BatchProgress], None]
+BatchCompleteCallback = Callable[[list[TranslationResult]], None]
 
 
 class BatchTranslator:
@@ -108,7 +148,9 @@ class BatchTranslator:
     def translate_changes(
         self,
         changes: list[StringChange],
-        progress_callback: Optional[ProgressCallback] = None
+        progress_callback: Optional[ProgressCallback] = None,
+        batch_progress_callback: Optional[BatchProgressCallback] = None,
+        on_batch_complete: Optional[BatchCompleteCallback] = None
     ) -> BatchResult:
         """Translate a list of string changes using token-aware batching.
 
@@ -120,6 +162,11 @@ class BatchTranslator:
             changes: List of StringChange objects to translate.
             progress_callback: Optional callback for progress updates.
                 Called with (current_index, total_count, current_key).
+            batch_progress_callback: Optional callback for batch-level progress.
+                Called with BatchProgress containing timing and batch info.
+            on_batch_complete: Optional callback called after each batch completes.
+                Receives list of TranslationResult for that batch. Use for
+                incremental file writes.
 
         Returns:
             BatchResult with all translation results.
@@ -139,15 +186,30 @@ class BatchTranslator:
         successful = 0
         failed = 0
         processed = 0
+        start_time = time.time()
 
         # Create token-aware batches
         batches = self._create_batches(items)
+        total_batches = len(batches)
 
-        for batch in batches:
+        for batch_num, batch in enumerate(batches, 1):
             keys = [key for key, _ in batch]
             texts = [text for _, text in batch]
+            batch_results = []
 
-            # Report progress for first item in batch
+            # Report batch-level progress
+            if batch_progress_callback:
+                elapsed = time.time() - start_time
+                batch_progress_callback(BatchProgress(
+                    current_batch=batch_num,
+                    total_batches=total_batches,
+                    strings_completed=processed,
+                    total_strings=total,
+                    elapsed_seconds=elapsed,
+                    current_key=keys[0]
+                ))
+
+            # Report per-string progress for first item in batch
             if progress_callback:
                 progress_callback(processed + 1, total, keys[0])
 
@@ -157,11 +219,13 @@ class BatchTranslator:
 
                 # Process results
                 for i, (key, text) in enumerate(batch):
-                    results.append(TranslationResult(
+                    result = TranslationResult(
                         key=key,
                         source_text=text,
                         translations=batch_translations[i]
-                    ))
+                    )
+                    results.append(result)
+                    batch_results.append(result)
                     successful += 1
                     processed += 1
 
@@ -172,14 +236,20 @@ class BatchTranslator:
             except Exception as e:
                 # If batch fails, mark all items in batch as failed
                 for key, text in batch:
-                    results.append(TranslationResult(
+                    result = TranslationResult(
                         key=key,
                         source_text=text,
                         translations={},
                         error=str(e)
-                    ))
+                    )
+                    results.append(result)
+                    batch_results.append(result)
                     failed += 1
                     processed += 1
+
+            # Call batch complete callback for incremental writes
+            if on_batch_complete and batch_results:
+                on_batch_complete(batch_results)
 
         return BatchResult(
             results=results,
@@ -191,13 +261,17 @@ class BatchTranslator:
     def translate_dict(
         self,
         strings: dict[str, str],
-        progress_callback: Optional[ProgressCallback] = None
+        progress_callback: Optional[ProgressCallback] = None,
+        batch_progress_callback: Optional[BatchProgressCallback] = None,
+        on_batch_complete: Optional[BatchCompleteCallback] = None
     ) -> BatchResult:
         """Translate a dictionary of strings using token-aware batching.
 
         Args:
             strings: Dictionary mapping keys to source text.
             progress_callback: Optional callback for progress updates.
+            batch_progress_callback: Optional callback for batch-level progress.
+            on_batch_complete: Optional callback for incremental file writes.
 
         Returns:
             BatchResult with all translation results.
@@ -212,13 +286,27 @@ class BatchTranslator:
         successful = 0
         failed = 0
         processed = 0
+        start_time = time.time()
 
         # Create token-aware batches
         batches = self._create_batches(items)
+        total_batches = len(batches)
 
-        for batch in batches:
+        for batch_num, batch in enumerate(batches, 1):
             keys = [key for key, _ in batch]
             texts = [text for _, text in batch]
+            batch_results = []
+
+            if batch_progress_callback:
+                elapsed = time.time() - start_time
+                batch_progress_callback(BatchProgress(
+                    current_batch=batch_num,
+                    total_batches=total_batches,
+                    strings_completed=processed,
+                    total_strings=total,
+                    elapsed_seconds=elapsed,
+                    current_key=keys[0]
+                ))
 
             if progress_callback:
                 progress_callback(processed + 1, total, keys[0])
@@ -227,11 +315,13 @@ class BatchTranslator:
                 batch_translations = self.engine.translate_batch_to_all(texts)
 
                 for i, (key, text) in enumerate(batch):
-                    results.append(TranslationResult(
+                    result = TranslationResult(
                         key=key,
                         source_text=text,
                         translations=batch_translations[i]
-                    ))
+                    )
+                    results.append(result)
+                    batch_results.append(result)
                     successful += 1
                     processed += 1
 
@@ -240,14 +330,19 @@ class BatchTranslator:
 
             except Exception as e:
                 for key, text in batch:
-                    results.append(TranslationResult(
+                    result = TranslationResult(
                         key=key,
                         source_text=text,
                         translations={},
                         error=str(e)
-                    ))
+                    )
+                    results.append(result)
+                    batch_results.append(result)
                     failed += 1
                     processed += 1
+
+            if on_batch_complete and batch_results:
+                on_batch_complete(batch_results)
 
         return BatchResult(
             results=results,

@@ -11,7 +11,7 @@ from translator.core import TranslationService
 from translator.diff import StringChange, ChangeType
 from translator.strings import StringsParser, StringEntry
 from translator.translation import TranslationEngine, BatchTranslator
-from translator.translation.batch import TranslationResult, BatchResult
+from translator.translation.batch import TranslationResult, BatchResult, BatchProgress
 from translator.translation.engine import estimate_tokens
 
 
@@ -390,3 +390,130 @@ class TestOllamaBatchTranslation:
         # Should fall back to individual translations
         assert result == ["translated_Hello", "translated_World"]
         assert call_count["single"] == 2
+
+
+class TestBatchProgress:
+    """Tests for BatchProgress dataclass."""
+
+    def test_percent_complete(self):
+        """Test percentage calculation."""
+        progress = BatchProgress(
+            current_batch=2,
+            total_batches=4,
+            strings_completed=50,
+            total_strings=100,
+            elapsed_seconds=30.0,
+            current_key="test_key"
+        )
+        assert progress.percent_complete == 50.0
+
+    def test_percent_complete_zero_total(self):
+        """Test percentage with zero total."""
+        progress = BatchProgress(
+            current_batch=1,
+            total_batches=1,
+            strings_completed=0,
+            total_strings=0,
+            elapsed_seconds=0.0,
+            current_key=""
+        )
+        assert progress.percent_complete == 100.0
+
+    def test_elapsed_formatted_seconds(self):
+        """Test elapsed time formatting for short durations."""
+        progress = BatchProgress(
+            current_batch=1,
+            total_batches=1,
+            strings_completed=0,
+            total_strings=10,
+            elapsed_seconds=45.0,
+            current_key="key"
+        )
+        assert progress.elapsed_formatted == "0:45"
+
+    def test_elapsed_formatted_minutes(self):
+        """Test elapsed time formatting for minutes."""
+        progress = BatchProgress(
+            current_batch=1,
+            total_batches=1,
+            strings_completed=0,
+            total_strings=10,
+            elapsed_seconds=125.0,  # 2:05
+            current_key="key"
+        )
+        assert progress.elapsed_formatted == "2:05"
+
+    def test_elapsed_formatted_hours(self):
+        """Test elapsed time formatting for hours."""
+        progress = BatchProgress(
+            current_batch=1,
+            total_batches=1,
+            strings_completed=0,
+            total_strings=10,
+            elapsed_seconds=3725.0,  # 1:02:05
+            current_key="key"
+        )
+        assert progress.elapsed_formatted == "1:02:05"
+
+
+class TestBatchCallbacks:
+    """Tests for batch progress and completion callbacks."""
+
+    def test_batch_progress_callback_called(self):
+        """Test batch progress callback is called for each batch."""
+        config = TranslationConfig(target_languages=["de"], max_tokens_per_batch=150)
+        engine = TranslationEngine(config)
+        batch = BatchTranslator(engine)
+
+        progress_calls = []
+
+        def batch_progress_callback(progress: BatchProgress):
+            progress_calls.append(progress)
+
+        changes = [
+            StringChange("key1", ChangeType.ADDED, new_value="A" * 100),
+            StringChange("key2", ChangeType.ADDED, new_value="B" * 100),
+            StringChange("key3", ChangeType.ADDED, new_value="C" * 100),
+        ]
+
+        with patch.object(engine.backend, 'translate_batch', return_value=["trans"]):
+            batch.translate_changes(
+                changes,
+                batch_progress_callback=batch_progress_callback
+            )
+
+        # Should have been called at least twice (multiple batches due to small limit)
+        assert len(progress_calls) >= 2
+        # First call should have 0 strings completed
+        assert progress_calls[0].strings_completed == 0
+        # Last call should show some progress
+        assert progress_calls[-1].current_batch == progress_calls[-1].total_batches
+
+    def test_on_batch_complete_callback(self):
+        """Test on_batch_complete callback is called after each batch."""
+        config = TranslationConfig(target_languages=["de"], max_tokens_per_batch=150)
+        engine = TranslationEngine(config)
+        batch = BatchTranslator(engine)
+
+        completed_batches = []
+
+        def on_batch_complete(results: list[TranslationResult]):
+            completed_batches.append(results)
+
+        changes = [
+            StringChange("key1", ChangeType.ADDED, new_value="A" * 100),
+            StringChange("key2", ChangeType.ADDED, new_value="B" * 100),
+        ]
+
+        with patch.object(engine.backend, 'translate_batch', return_value=["translated"]):
+            batch.translate_changes(
+                changes,
+                on_batch_complete=on_batch_complete
+            )
+
+        # Should have been called at least once
+        assert len(completed_batches) >= 1
+        # Each batch should have results
+        for batch_results in completed_batches:
+            assert len(batch_results) > 0
+            assert all(isinstance(r, TranslationResult) for r in batch_results)

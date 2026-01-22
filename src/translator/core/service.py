@@ -8,7 +8,10 @@ from ..config import TranslationConfig
 from ..diff import DiffDetector, StringChange, ChangeType
 from ..strings import StringsParser
 from ..translation import TranslationEngine, BatchTranslator
-from ..translation.batch import BatchResult, TranslationResult
+from ..translation.batch import (
+    BatchResult, TranslationResult, BatchProgress,
+    BatchProgressCallback, BatchCompleteCallback
+)
 
 
 @dataclass
@@ -57,7 +60,8 @@ class TranslationService:
         self,
         source_file: Path,
         base_ref: str = "HEAD~1",
-        progress_callback: Optional[ProgressCallback] = None
+        progress_callback: Optional[ProgressCallback] = None,
+        batch_progress_callback: Optional[BatchProgressCallback] = None
     ) -> TranslationReport:
         """Translate changes in a source file to all target languages.
 
@@ -65,6 +69,8 @@ class TranslationService:
             source_file: Path to the source .strings file.
             base_ref: Git reference to compare against.
             progress_callback: Optional callback for progress updates.
+            batch_progress_callback: Optional callback for batch-level progress
+                with timing information.
 
         Returns:
             TranslationReport with results.
@@ -102,13 +108,7 @@ class TranslationService:
                 dry_run=True
             )
 
-        # Translate changes
-        batch_result = self.batch_translator.translate_changes(
-            changes,
-            progress_callback=progress_callback
-        )
-
-        # Get removals
+        # Get removals first (only process once at the start)
         all_changes = self.detector.detect_changes(
             source_file,
             base_ref=base_ref,
@@ -119,18 +119,34 @@ class TranslationService:
             if c.change_type == ChangeType.REMOVED
         }
 
-        # Update target files
-        files_updated = self._update_target_files(
-            source_file,
-            batch_result.results,
-            removed_keys
+        # Track files that have been updated
+        updated_files_set: set[Path] = set()
+
+        # Create callback for incremental file writes
+        def on_batch_complete(batch_results: list[TranslationResult]):
+            """Write translations to files after each batch completes."""
+            # Only pass removed_keys on first batch to avoid repeated removals
+            keys_to_remove = removed_keys if not updated_files_set else set()
+            updated = self._update_target_files(
+                source_file,
+                batch_results,
+                keys_to_remove
+            )
+            updated_files_set.update(updated)
+
+        # Translate changes with incremental writes
+        batch_result = self.batch_translator.translate_changes(
+            changes,
+            progress_callback=progress_callback,
+            batch_progress_callback=batch_progress_callback,
+            on_batch_complete=on_batch_complete
         )
 
         return TranslationReport(
             source_file=source_file,
             changes_detected=changes,
             batch_result=batch_result,
-            files_updated=files_updated,
+            files_updated=list(updated_files_set),
             dry_run=False
         )
 
@@ -138,7 +154,8 @@ class TranslationService:
         self,
         source_file: Path,
         base_ref: str = "HEAD",
-        progress_callback: Optional[ProgressCallback] = None
+        progress_callback: Optional[ProgressCallback] = None,
+        batch_progress_callback: Optional[BatchProgressCallback] = None
     ) -> TranslationReport:
         """Translate changes between a ref and the current working tree.
 
@@ -146,6 +163,7 @@ class TranslationService:
             source_file: Path to the source .strings file.
             base_ref: Git reference to compare against.
             progress_callback: Optional callback for progress updates.
+            batch_progress_callback: Optional callback for batch-level progress.
 
         Returns:
             TranslationReport with results.
@@ -188,30 +206,38 @@ class TranslationService:
                 dry_run=True
             )
 
-        # Translate changes
-        batch_result = self.batch_translator.translate_changes(
-            translatable,
-            progress_callback=progress_callback
-        )
-
         # Get removals
         removed_keys = {
             c.key for c in all_changes
             if c.change_type == ChangeType.REMOVED
         }
 
-        # Update target files
-        files_updated = self._update_target_files(
-            source_file,
-            batch_result.results,
-            removed_keys
+        # Track files that have been updated
+        updated_files_set: set[Path] = set()
+
+        # Create callback for incremental file writes
+        def on_batch_complete(batch_results: list[TranslationResult]):
+            keys_to_remove = removed_keys if not updated_files_set else set()
+            updated = self._update_target_files(
+                source_file,
+                batch_results,
+                keys_to_remove
+            )
+            updated_files_set.update(updated)
+
+        # Translate changes with incremental writes
+        batch_result = self.batch_translator.translate_changes(
+            translatable,
+            progress_callback=progress_callback,
+            batch_progress_callback=batch_progress_callback,
+            on_batch_complete=on_batch_complete
         )
 
         return TranslationReport(
             source_file=source_file,
             changes_detected=translatable,
             batch_result=batch_result,
-            files_updated=files_updated,
+            files_updated=list(updated_files_set),
             dry_run=False
         )
 

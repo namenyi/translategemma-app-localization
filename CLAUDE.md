@@ -83,6 +83,11 @@ TranslateGemma has a 2K token context window. The service uses token-aware batch
 python -m translator translate <file> --batch-tokens 1000 --parallel 4
 ```
 
+**Progress reporting:**
+- Batch-level progress bar with percentage, elapsed time, and string counts
+- Incremental file writes after each batch (partial progress is saved if interrupted)
+- Verbose mode (`-v`) shows per-string progress within batches
+
 ## Testing Notes
 
 - Parser tests use `tempfile` for file I/O tests
