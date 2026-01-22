@@ -1,29 +1,29 @@
 /* App Title */
-"app_title" = "Demo App";
+"app_title" = "Application de démonstration.";
 
 /* Welcome message shown on first launch */
 "welcome_message" = "Bienvenue dans notre application de démonstration, absolument géniale !";
 
 /* Button to continue */
-"continue_button" = "Continuer";
+"continue_button" = "Continuez.";
 
 /* Cancel action */
-"cancel_button" = "Annuler";
+"cancel_button" = "Annuler.";
 
 /* Settings screen title */
-"settings_title" = "Paramètres";
+"settings_title" = "Paramètres.";
 
 /* Profile section header */
-"profile_section" = "Profil";
+"profile_section" = "Profil.";
 
 /* Notifications toggle label */
-"notifications_label" = "Activer les notifications";
+"notifications_label" = "Activer les notifications.";
 
 /* Dark mode toggle label */
-"dark_mode_label" = "Mode sombre";
+"dark_mode_label" = "Mode sombre.";
 
 /* About section */
-"about_title" = "À propos";
+"about_title" = "À propos de.";
 
 "new_feature_banner" = "Découvrez nos nouvelles fonctionnalités !";
 

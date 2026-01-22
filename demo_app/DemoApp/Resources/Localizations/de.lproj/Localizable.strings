@@ -1,11 +1,11 @@
 /* App Title */
-"app_title" = "Demo App";
+"app_title" = "Demo-Anwendung.";
 
 /* Welcome message shown on first launch */
 "welcome_message" = "Willkommen bei unserer fantastischen Demo-App!";
 
 /* Button to continue */
-"continue_button" = "Weiter";
+"continue_button" = "Fortsetzen.";
 
 /* Cancel action */
 "cancel_button" = "Abbrechen";
@@ -14,16 +14,16 @@
 "settings_title" = "Einstellungen";
 
 /* Profile section header */
-"profile_section" = "Profil";
+"profile_section" = "Profil.";
 
 /* Notifications toggle label */
-"notifications_label" = "Benachrichtigungen aktivieren";
+"notifications_label" = "Benachrichtigungen aktivieren.";
 
 /* Dark mode toggle label */
-"dark_mode_label" = "Dunkelmodus";
+"dark_mode_label" = "Dunkelmodus.";
 
 /* About section */
-"about_title" = "Über";
+"about_title" = "Über.";
 
 "new_feature_banner" = "Entdecken Sie unsere neuen Funktionen!";
 
