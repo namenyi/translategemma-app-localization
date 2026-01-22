@@ -32,7 +32,15 @@ translation-service/
     └── DemoApp/Resources/Localizations/
         ├── en.lproj/Localizable.strings
         ├── de.lproj/Localizable.strings
-        └── fr.lproj/Localizable.strings
+        ├── fr.lproj/Localizable.strings
+        ├── es.lproj/Localizable.strings
+        ├── it.lproj/Localizable.strings
+        ├── ja.lproj/Localizable.strings
+        ├── ko.lproj/Localizable.strings
+        ├── pt-BR.lproj/Localizable.strings
+        ├── ru.lproj/Localizable.strings
+        ├── zh-Hans.lproj/Localizable.strings
+        └── zh-Hant.lproj/Localizable.strings
 ```
 
 ## Implementation Details
@@ -71,16 +79,20 @@ translation-service/
 
 Orchestration flow:
 1. Detect changed keys (added/modified) via git diff
-2. Translate each changed key to all target languages
-3. Update target .strings files (add new keys, update modified, remove deleted)
+2. Detect missing translations (keys in source but absent from any target language)
+3. Merge changes (git changes + missing translations, avoiding duplicates)
+4. Translate each key to all target languages
+5. Update target .strings files (add new keys, update modified, remove deleted)
 
 ### CLI (`src/translator/cli.py`)
 
 Commands:
-- `translate <file> [--base HEAD~1] [--dry-run] [--languages de,fr]`
+- `translate <file> [--base HEAD~1] [--dry-run] [--languages de,fr,es,it,ja,ko,pt-BR,ru,zh-Hans,zh-Hant]`
 - `diff <file> [--base HEAD~1]` - show changed keys
 - `parse <file>` - display parsed entries
 - `check` - verify translation backend is available
+
+Default target languages: de, fr, es, it, ja, ko, pt-BR, ru, zh-Hans, zh-Hant
 
 ## Dependencies
 
@@ -110,8 +122,9 @@ python -m translator translate demo_app/.../en.lproj/Localizable.strings --base 
 ## Verification Plan
 
 1. Create initial English strings, commit
-2. Run `translate --dry-run` (should show no changes)
+2. Run `translate --dry-run` (should show no changes if all target files are in sync)
 3. Add/modify some English keys, commit
 4. Run `translate --dry-run` (should list changed keys)
-5. Run `translate` (should update de.lproj and fr.lproj files)
+5. Run `translate` (should update all target language .lproj files)
 6. Verify translated content is reasonable
+7. Add a new target language (empty .lproj file) and run `translate` - should detect all keys as missing and translate them

@@ -4,7 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Python translation service for Apple `.strings` files using TranslateGemma 12B. Detects changes in English strings via git diff and automatically translates them to target languages (default: German and French).
+Python translation service for Apple `.strings` files using TranslateGemma 12B. Detects changes in English strings via git diff and automatically translates them to target languages.
+
+**Default target languages**: de, fr, es, it, ja, ko, pt-BR, ru, zh-Hans, zh-Hant
+
+**Translation triggers**:
+1. Git diff changes (added/modified keys since last commit)
+2. Missing translations (keys in English source that don't exist in any target language file)
 
 ## Commands
 
@@ -36,7 +42,7 @@ Key modules:
 - `src/translator/translation/` - Translation engine with Ollama and HuggingFace backends
 - `src/translator/core/service.py` - Orchestrates diff detection → translation → file updates
 
-**File conventions**: Source files are in `en.lproj/`, targets in `{lang}.lproj/` (e.g., `de.lproj/`, `fr.lproj/`)
+**File conventions**: Source files are in `en.lproj/`, targets in `{lang}.lproj/` (e.g., `de.lproj/`, `ja.lproj/`, `zh-Hans.lproj/`)
 
 ## TranslateGemma Prompt Format
 
