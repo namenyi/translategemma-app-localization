@@ -55,10 +55,24 @@ German, French, Spanish, Italian, Japanese, Korean, Brazilian Portuguese, Russia
 python -m translator translate <file> [options]
 
 Options:
-  --base TEXT        Git ref to compare against (default: HEAD~1)
-  --dry-run          Preview changes without modifying files
-  -l, --languages    Target languages (default: de,fr,es,it,ja,ko,pt-BR,ru,zh-Hans,zh-Hant)
-  -v, --verbose      Show detailed output
+  --base TEXT           Git ref to compare against (default: HEAD~1)
+  --dry-run             Preview changes without modifying files
+  -l, --languages       Target languages (default: de,fr,es,it,ja,ko,pt-BR,ru,zh-Hans,zh-Hant)
+  --batch-tokens INT    Max tokens per translation batch (default: 1000)
+  --parallel INT        Languages to translate in parallel (default: 0=sequential)
+  -v, --verbose         Show detailed output
+```
+
+### Performance Tuning
+
+For large changesets or when adding a new language with many existing strings:
+
+```bash
+# Translate 4 languages in parallel with 1K token batches
+python -m translator translate path/to/en.lproj/Localizable.strings --parallel 4
+
+# Smaller batches for very long strings
+python -m translator translate path/to/en.lproj/Localizable.strings --batch-tokens 500
 ```
 
 ## Other Commands

@@ -48,10 +48,39 @@ Key modules:
 
 The Ollama backend uses a specific prompt format required by TranslateGemma - note the **2 blank lines** before the text to translate:
 
+**Single-string mode:**
 ```
 You are a professional {source} to {target} translator...
 
+
 {text}
+```
+
+**Batch mode** (multiple strings in one request):
+```
+You are a professional {source} to {target} translator. Translate each numbered line...
+
+
+1. {text1}
+2. {text2}
+...
+```
+
+## Batching & Performance
+
+TranslateGemma has a 2K token context window. The service uses token-aware batching to:
+- Group multiple strings into single API requests (reduces overhead)
+- Automatically split large changesets into ~1K token batches
+- Handle oversized strings by translating them individually
+- Fall back to single-string mode if batch parsing fails
+
+**Configuration** (in `TranslationConfig`):
+- `max_tokens_per_batch`: Token budget per batch (default: 1000)
+- `parallel_languages`: Concurrent language translations (default: 2, 0=sequential)
+
+**CLI options:**
+```bash
+python -m translator translate <file> --batch-tokens 1000 --parallel 4
 ```
 
 ## Testing Notes

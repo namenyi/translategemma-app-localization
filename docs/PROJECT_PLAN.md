@@ -63,17 +63,43 @@ translation-service/
 
 **Ollama backend** (for local PoC):
 - Model: `translategemma:12b` via `http://localhost:11434/api/generate`
-- Critical prompt format (must include 2 blank lines before text):
+- Single-string prompt format (2 blank lines before text):
   ```
   You are a professional English (en) to German (de) translator...
 
 
   {text}
   ```
+- Batch prompt format (multiple strings in one request):
+  ```
+  You are a professional English (en) to German (de) translator. Translate each numbered line...
+
+
+  1. {text1}
+  2. {text2}
+  ```
+
+**Token-aware batching:**
+- TranslateGemma has 2K token context window
+- Strings grouped into batches respecting `max_tokens_per_batch` (default: 1000)
+- Token estimation: ~4 characters per token
+- Oversized strings automatically get their own batch
+- Fallback to single-string mode if batch response parsing fails
+
+**Parallel translation:**
+- `parallel_languages` config controls concurrent language translations
+- Uses `ThreadPoolExecutor` for parallel HTTP requests to Ollama
 
 **HuggingFace backend** (alternative):
 - Model: `google/translategemma-12b-it`
 - Uses transformers chat template
+
+### Batch Translator (`src/translator/translation/batch.py`)
+
+- Groups strings into token-limited batches via `_create_batches()`
+- Calls `TranslationEngine.translate_batch_to_all()` for each batch
+- Progress callback reports per-string progress within batches
+- Failed batches mark all contained strings as errors
 
 ### Main Service (`src/translator/core/service.py`)
 
@@ -81,13 +107,19 @@ Orchestration flow:
 1. Detect changed keys (added/modified) via git diff
 2. Detect missing translations (keys in source but absent from any target language)
 3. Merge changes (git changes + missing translations, avoiding duplicates)
-4. Translate each key to all target languages
+4. Group strings into batches and translate to all target languages
 5. Update target .strings files (add new keys, update modified, remove deleted)
 
 ### CLI (`src/translator/cli.py`)
 
 Commands:
-- `translate <file> [--base HEAD~1] [--dry-run] [--languages de,fr,es,it,ja,ko,pt-BR,ru,zh-Hans,zh-Hant]`
+- `translate <file> [options]` - translate changed/missing strings
+  - `--base HEAD~1` - git ref to compare against
+  - `--dry-run` - preview without modifying files
+  - `--languages de,fr,...` - target language codes
+  - `--batch-tokens 1000` - max tokens per batch (for context window limits)
+  - `--parallel 0` - languages to translate in parallel (0=sequential)
+  - `-v, --verbose` - detailed output
 - `diff <file> [--base HEAD~1]` - show changed keys
 - `parse <file>` - display parsed entries
 - `check` - verify translation backend is available
