@@ -24,6 +24,8 @@ def cli():
 @click.option('--languages', '-l', default='de,fr,es,it,ja,ko,pt-BR,ru,zh-Hans,zh-Hant', help='Comma-separated target language codes')
 @click.option('--ollama-url', default='http://localhost:11434', help='Ollama API URL')
 @click.option('--model', default='translategemma:12b', help='Ollama model name')
+@click.option('--batch-tokens', default=1000, help='Max tokens per translation batch (for context window limits)')
+@click.option('--parallel', default=0, help='Number of languages to translate in parallel (0=sequential)')
 @click.option('--verbose', '-v', is_flag=True, help='Verbose output')
 def translate(
     file: Path,
@@ -32,6 +34,8 @@ def translate(
     languages: str,
     ollama_url: str,
     model: str,
+    batch_tokens: int,
+    parallel: int,
     verbose: bool
 ):
     """Translate changes in a .strings file to target languages.
@@ -45,7 +49,9 @@ def translate(
         ollama_url=ollama_url,
         ollama_model=model,
         dry_run=dry_run,
-        verbose=verbose
+        verbose=verbose,
+        max_tokens_per_batch=batch_tokens,
+        parallel_languages=parallel
     )
 
     service = TranslationService(config=config)
@@ -64,6 +70,8 @@ def translate(
     click.echo(f"Analyzing changes in {file}...")
     click.echo(f"Comparing against: {base}")
     click.echo(f"Target languages: {', '.join(target_langs)}")
+    if verbose:
+        click.echo(f"Batch size: {batch_tokens} tokens, Parallelism: {parallel or 'sequential'}")
     click.echo()
 
     report = service.translate_file(

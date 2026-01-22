@@ -1,12 +1,28 @@
 """Translation engine with multiple backend support."""
 
 import json
+import re
 from abc import ABC, abstractmethod
 from typing import Optional
 
 import requests
 
 from ..config import TranslationConfig, LANGUAGE_NAMES
+
+
+def estimate_tokens(text: str) -> int:
+    """Estimate the number of tokens in a text.
+
+    Uses a conservative estimate of ~4 characters per token for English.
+    This is a rough approximation; actual tokenization varies by model.
+
+    Args:
+        text: The text to estimate tokens for.
+
+    Returns:
+        Estimated token count.
+    """
+    return max(1, len(text) // 4)
 
 
 class TranslationBackend(ABC):
@@ -88,6 +104,121 @@ class OllamaBackend(TranslationBackend):
 
         result = response.json()
         return result.get("response", "").strip()
+
+    def translate_batch(
+        self,
+        texts: list[str],
+        source_lang: str,
+        target_lang: str
+    ) -> list[str]:
+        """Translate multiple texts in a single request.
+
+        Uses a numbered format to batch multiple strings together:
+        Input: "1. text1\n2. text2\n..."
+        Output: "1. translation1\n2. translation2\n..."
+
+        If batch translation fails or returns wrong count, falls back to
+        single-string translation for each text.
+
+        Args:
+            texts: List of texts to translate.
+            source_lang: Source language code.
+            target_lang: Target language code.
+
+        Returns:
+            List of translated texts in the same order.
+        """
+        if len(texts) == 0:
+            return []
+
+        if len(texts) == 1:
+            return [self.translate(texts[0], source_lang, target_lang)]
+
+        source_name = LANGUAGE_NAMES.get(source_lang, source_lang)
+        target_name = LANGUAGE_NAMES.get(target_lang, target_lang)
+
+        # Build numbered input
+        numbered_input = "\n".join(
+            f"{i+1}. {text}" for i, text in enumerate(texts)
+        )
+
+        # Batch translation prompt with numbered format
+        prompt = (
+            f"You are a professional {source_name} ({source_lang}) to "
+            f"{target_name} ({target_lang}) translator. Translate each numbered "
+            f"line below accurately while preserving the meaning and tone. "
+            f"Output ONLY the translations in the same numbered format.\n\n\n"
+            f"{numbered_input}"
+        )
+
+        try:
+            response = requests.post(
+                f"{self.url}/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.1,
+                    }
+                },
+                timeout=180  # Longer timeout for batch
+            )
+            response.raise_for_status()
+
+            result = response.json()
+            output = result.get("response", "").strip()
+
+            # Parse numbered output
+            translations = self._parse_numbered_output(output, len(texts))
+
+            if translations is not None:
+                return translations
+
+        except (requests.RequestException, json.JSONDecodeError):
+            pass
+
+        # Fallback: translate individually if batch failed
+        return [
+            self.translate(text, source_lang, target_lang)
+            for text in texts
+        ]
+
+    def _parse_numbered_output(
+        self,
+        output: str,
+        expected_count: int
+    ) -> Optional[list[str]]:
+        """Parse numbered translation output.
+
+        Args:
+            output: The model's response text.
+            expected_count: Expected number of translations.
+
+        Returns:
+            List of translations if parsing succeeded, None otherwise.
+        """
+        # Match lines starting with "N. " or "N: " or just "N."
+        pattern = r'^(\d+)[.\s:]+\s*(.+?)$'
+        translations = {}
+
+        for line in output.split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+
+            match = re.match(pattern, line)
+            if match:
+                idx = int(match.group(1))
+                text = match.group(2).strip()
+                if 1 <= idx <= expected_count:
+                    translations[idx] = text
+
+        # Check if we got all expected translations
+        if len(translations) == expected_count:
+            return [translations[i+1] for i in range(expected_count)]
+
+        return None
 
     def is_available(self) -> bool:
         """Check if Ollama is running and the model is available."""
@@ -251,6 +382,80 @@ class TranslationEngine:
             )
 
         return translations
+
+    def translate_batch(
+        self,
+        texts: list[str],
+        target_lang: str,
+        source_lang: Optional[str] = None
+    ) -> list[str]:
+        """Translate multiple texts to a single target language.
+
+        Args:
+            texts: List of texts to translate.
+            target_lang: Target language code.
+            source_lang: Source language code.
+
+        Returns:
+            List of translated texts in the same order.
+        """
+        source = source_lang or self.config.source_language
+
+        if hasattr(self.backend, 'translate_batch'):
+            return self.backend.translate_batch(texts, source, target_lang)
+
+        # Fallback for backends without batch support
+        return [
+            self.backend.translate(text, source, target_lang)
+            for text in texts
+        ]
+
+    def translate_batch_to_all(
+        self,
+        texts: list[str],
+        source_lang: Optional[str] = None
+    ) -> list[dict[str, str]]:
+        """Translate multiple texts to all configured target languages.
+
+        Args:
+            texts: List of texts to translate.
+            source_lang: Source language code.
+
+        Returns:
+            List of dictionaries, each mapping language codes to translations.
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        source = source_lang or self.config.source_language
+        target_languages = self.config.target_languages
+        parallel = self.config.parallel_languages
+
+        # Initialize result structure
+        results = [{} for _ in texts]
+
+        if parallel > 0:
+            # Parallel translation across languages
+            with ThreadPoolExecutor(max_workers=parallel) as executor:
+                futures = {
+                    executor.submit(
+                        self.translate_batch, texts, lang, source
+                    ): lang
+                    for lang in target_languages
+                }
+
+                for future in as_completed(futures):
+                    lang = futures[future]
+                    translations = future.result()
+                    for i, trans in enumerate(translations):
+                        results[i][lang] = trans
+        else:
+            # Sequential translation
+            for lang in target_languages:
+                translations = self.translate_batch(texts, lang, source)
+                for i, trans in enumerate(translations):
+                    results[i][lang] = trans
+
+        return results
 
     def is_available(self) -> bool:
         """Check if the translation backend is available."""

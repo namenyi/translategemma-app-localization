@@ -45,6 +45,8 @@ class TranslationConfig:
         hf_model: HuggingFace model name.
         dry_run: If True, don't actually modify files.
         verbose: If True, print detailed output.
+        max_tokens_per_batch: Max tokens per batch for batched translation.
+        parallel_languages: Number of languages to translate in parallel (0=sequential).
     """
     source_language: str = "en"
     target_languages: list[str] = field(default_factory=lambda: ["de", "fr", "es", "it", "ja", "ko", "pt-BR", "ru", "zh-Hans", "zh-Hant"])
@@ -54,6 +56,8 @@ class TranslationConfig:
     hf_model: str = "google/translategemma-12b-it"
     dry_run: bool = False
     verbose: bool = False
+    max_tokens_per_batch: int = 1000
+    parallel_languages: int = 2
 
     def get_language_name(self, code: str) -> str:
         """Get the full language name for a language code.

@@ -15,7 +15,9 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(ollama list:*)",
-      "Bash(pytest:*)"
+      "Bash(pytest:*)",
+      "Bash(.venv/bin/python -m pytest:*)",
+      "Bash(.venv/bin/python:*)"
     ]
   }
 }
